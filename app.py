@@ -9,12 +9,45 @@ DATA_FILE = Path(__file__).parent / "todos.json"
 
 CATEGORIES = ["업무", "개인", "공부"]
 FILTER_OPTIONS = ["전체"] + CATEGORIES
+AUTO_OPTION = "🔍 자동 분류"
 
 CATEGORY_COLORS = {
     "업무": ("#dfeaff", "#3466c4"),
     "개인": ("#ffe1ec", "#cf5b85"),
     "공부": ("#dff5e3", "#379154"),
 }
+
+CATEGORY_KEYWORDS = {
+    "업무": [
+        "회의", "미팅", "보고서", "프로젝트", "업무", "메일", "이메일", "발표",
+        "출장", "계약", "클라이언트", "고객", "회사", "야근", "결재", "기획",
+        "협업", "마감", "제출", "회의록", "팀", "업체", "영업", "품의",
+    ],
+    "개인": [
+        "운동", "헬스", "병원", "쇼핑", "여행", "가족", "친구", "취미", "청소",
+        "빨래", "약속", "생일", "휴식", "산책", "장보기", "요리", "반려동물",
+        "은행", "택배", "차량", "정비", "데이트",
+    ],
+    "공부": [
+        "공부", "시험", "숙제", "과제", "강의", "책", "독서", "복습", "예습",
+        "학습", "논문", "자격증", "토익", "코딩", "스터디", "수업", "강좌",
+        "문제집", "암기", "리포트",
+    ],
+}
+
+
+def classify_category(text):
+    lowered = text.lower()
+    scores = {cat: 0 for cat in CATEGORIES}
+    for cat, keywords in CATEGORY_KEYWORDS.items():
+        for kw in keywords:
+            if kw.lower() in lowered:
+                scores[cat] += 1
+
+    best_cat = max(scores, key=scores.get)
+    if scores[best_cat] == 0:
+        return "개인", False
+    return best_cat, True
 
 
 def load_todos():
@@ -194,14 +227,25 @@ st.markdown(
 
 # ── 할 일 추가 ──────────────────────────
 with st.form("add_form", clear_on_submit=True):
-    col_category, col_text, col_btn = st.columns([1, 2.3, 1])
-    category = col_category.selectbox("카테고리", CATEGORIES, label_visibility="collapsed")
+    col_category, col_text, col_btn = st.columns([1.3, 2.3, 1])
+    category = col_category.selectbox(
+        "카테고리", [AUTO_OPTION] + CATEGORIES, label_visibility="collapsed"
+    )
     text = col_text.text_input(
         "할 일", placeholder="할 일을 입력하세요", label_visibility="collapsed"
     )
     submitted = col_btn.form_submit_button("추가", use_container_width=True)
     if submitted and text.strip():
-        add_todo(todos, text.strip(), category)
+        clean_text = text.strip()
+        if category == AUTO_OPTION:
+            final_category, matched = classify_category(clean_text)
+            add_todo(todos, clean_text, final_category)
+            if matched:
+                st.toast(f"🔍 '{clean_text}' → [{final_category}]로 자동 분류되었습니다.")
+            else:
+                st.toast(f"🔍 일치하는 키워드가 없어 [{final_category}]로 분류되었습니다.")
+        else:
+            add_todo(todos, clean_text, category)
         st.rerun()
 
 # ── 카테고리 필터 탭 ──────────────────────────
